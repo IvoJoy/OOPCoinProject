@@ -61,7 +61,7 @@ struct blockChain {
 private:
     User* users;
     unsigned usersSize;
-    int* userCoins;
+    double* userCoins;
     unsigned userCoinsSize = 32;
     unsigned usersCount = 0;
     unsigned currentId;
@@ -86,7 +86,7 @@ private:
 
     void resizeUserCoins()
     {
-        int* array2 = new int[userCoinsSize * 2] { -1 };
+        double* array2 = new double[userCoinsSize * 2] { -1 };
 
         for (size_t i = 0; i < userCoinsSize; i++)
         {
@@ -149,6 +149,30 @@ private:
         reader.read((char*)blocks, sizeof(TransactionBlock) * blocksSize);
 
         blocksCount = blocksSize;
+    }
+
+    void getUserCoinsFromArrayOfBlocks()
+    {
+        inicializeUserCoins();
+
+
+        for (int i = 0; i < blocksCount; i++)
+        {
+            for (int j = 0; j < blocks[i].validTransactions; j++)
+            {
+                Transaction currentTransaction = blocks[i].transactions[j];
+                userCoins[currentTransaction.receiver] += currentTransaction.coins;
+                userCoins[currentTransaction.sender] -= currentTransaction.coins;
+            }
+        }
+    }
+
+    void inicializeUserCoins()
+    {
+        for (size_t i = 0; i < usersCount; i++)
+        {
+            userCoins[users[i].id] = 0;
+        }
     }
 
     void saveUsers() const
@@ -225,18 +249,15 @@ private:
 
     void removeUserByIndex(unsigned index)
     {
-        for (size_t i = index; i < usersCount - 1; i++)
-        {
-            users[i] = users[i + 1];
-        }
+        users[index] = users[usersCount - 1];
     }
 
-    bool userIsValid(int userID) const
+    bool userIsValid(unsigned userID) const
     {
         return userCoins[userID] != -1 || userID == 0;
     }
 
-    int getCurrentId() const {
+    unsigned getCurrentId() const {
         int id = 0;
 
         for (int i = 0; i < blocksCount; i++) {
@@ -262,13 +283,24 @@ public:
         }
     }
 
+    //test function to be deleted later
+    void printUsers() {
+        for (int i = 0; i < usersCount; i++) {
+            
+           User currentUser = users[i];
+           std::cout << currentUser.id << ' ' << currentUser.name << ' ' << userCoins[currentUser.id]<< std::endl;
+            
+        }
+    }
+
+
     blockChain()
     {
-        userCoins = new int[userCoinsSize] {-1};
+        userCoins = new double[userCoinsSize] {-1};
 
         readUsers();
         readBlocks();
-
+        getUserCoinsFromArrayOfBlocks();
         currentId = getCurrentId();
     }
 
@@ -283,13 +315,19 @@ public:
         {
             if (strcmp(name, users[i].name) == 0)
             {
+                createTransaction(users[i].id, 0, userCoins[users[i].id]);
                 removeUserByIndex(i);
                 cout << "Successfuly removed!";
                 usersCount--;
                 userCoins[users[i].id] = -1;
+
+                
+
                 break;
             }
         }
+
+        
 
     }
 
@@ -315,24 +353,127 @@ public:
         createTransaction(0, user.id, cash * 420);
     }
 
-    void createTransaction(unsigned senderID, unsigned receiverID, unsigned amountOfCoins)
+    void sendArrayToTextFile(User* usersArray, unsigned arrayLength)
+    {
+        ofstream writer;
+        writer.open("wealthiestUsers.txt", ios::app);
+
+        if (!writer.is_open())
+        {
+            return;
+        }
+         
+        for (size_t i = 0; i <= arrayLength; i++)
+        {
+            writer << usersArray[i].name << ' ' << userCoins[usersArray[i].id] << endl;
+        }
+       
+    }
+
+    void getWealthiestUsers(unsigned n) // ako iska top N usera, a imame po-malko ot N useri kato cqlo
+    {
+        User* wealthiestUsers = new User[n];
+
+        unsigned index = 0; 
+
+        for (size_t i = 0; i < usersCount; i++)
+        {
+            for (size_t j = 0; j < n; j++)
+            {
+                if (j == index)
+                {
+                    wealthiestUsers[index++] = users[i];
+                    break;
+                }
+
+                if (userCoins[users[i].id] >= userCoins[wealthiestUsers[j].id])
+                {
+                    unsigned startIndex = index==n ? index-1 : index;
+                    shiftRight(wealthiestUsers, startIndex, j);
+                    index = index < n ? index + 1 : index;
+                    wealthiestUsers[j] = users[i]; 
+                    break;
+                }
+
+            }
+        }
+        
+        unsigned length = index == n ? index - 1 : index; 
+        sendArrayToTextFile(wealthiestUsers, length);
+        printArray(wealthiestUsers, index);
+
+        delete[] wealthiestUsers;
+    }
+
+    void shiftRight(User* users, unsigned startIndex, unsigned endIndex)
+    {
+        for (size_t i = startIndex; i > endIndex; i--)
+        {
+            users[i] = users[i - 1];
+        }
+    }
+
+    void printArray(User* users, unsigned size)
+    {
+        for (size_t i = 0; i < size; i++)
+        {
+            cout << users[i].name << ' ' << userCoins[users[i].id] << endl;
+        }
+    }
+
+    bool isTransactionValid(unsigned senderID, unsigned receiverID, double amountOfCoins)
     {
         if (!(userIsValid(senderID) && userIsValid(receiverID)))
         {
-            cout << "Invalid ID";
-            return;
+            return 0;
         }
-        if (amountOfCoins > userCoins[senderID] || amountOfCoins <= 0)
+        if ((amountOfCoins > userCoins[senderID] || amountOfCoins <= 0) && senderID != 0)
         {
-            cout << "Invalid amount";
+            return 0;
+        }
+    }
+
+    void sendCoinsToOtherUser()
+    {
+        int senderID;
+        int receiverID;
+        double amountOfCoins;
+        
+        cout << "Tell me the ID of the sender: ";
+        cin >> senderID;
+
+        cout << "Tell me the ID of the receiver: ";
+        cin >> receiverID;
+
+        cout << "Tell me how many coins are we transfering: ";
+        cin >> amountOfCoins;
+
+        cin.ignore();
+        
+        if (!(isTransactionValid(senderID, receiverID, amountOfCoins)))
+        {
+            
+            cout << "Transaction failed! Cause may be that an ID was incorrect or the sender doesn't have enough coins.";
             return;
         }
+        
+        createTransaction(senderID, receiverID, amountOfCoins);
+        userCoins[senderID] -= amountOfCoins;
+        userCoins[receiverID] += amountOfCoins;
+        
+    }
+
+    void createTransaction(unsigned senderID, unsigned receiverID, unsigned amountOfCoins)
+    {
+       
 
 
         Transaction transaction;
         transaction.sender = senderID;
         transaction.receiver = receiverID;
         transaction.coins = amountOfCoins;
+
+
 
         addTransactionToBlock(transaction);
     }
@@ -353,5 +494,9 @@ int main()
 {
     blockChain bc;
 
-    bc.printTransactions();
+    
+    bc.getWealthiestUsers(4);
+
+
+   
 }

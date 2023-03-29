@@ -1,7 +1,10 @@
 #include <fstream>
 #include <iostream>
 #include <cstring>
+#include <ctime>
 using namespace std;
+
+#pragma warning(disable : 4996)
 
 
 unsigned computeHash(const unsigned char* memory, int length)
@@ -278,8 +281,9 @@ public:
         for (int i = 0; i < blocksCount; i++) {
             for (int j = 0; j < blocks[i].validTransactions; j++) {
                 Transaction curr = blocks[i].transactions[j];
-                std::cout << curr.receiver << ' ' << curr.sender << ' ' << curr.coins << std::endl;
+                cout << curr.receiver << ' ' << curr.sender << ' ' << curr.coins << ' ' << curr.time << endl;
             }
+            cout << "kray na bloka" << endl;
         }
     }
 
@@ -288,7 +292,7 @@ public:
         for (int i = 0; i < usersCount; i++) {
             
            User currentUser = users[i];
-           std::cout << currentUser.id << ' ' << currentUser.name << ' ' << userCoins[currentUser.id]<< std::endl;
+          cout << currentUser.id << ' ' << currentUser.name << ' ' << userCoins[currentUser.id]<< endl;
             
         }
     }
@@ -356,7 +360,14 @@ public:
     void sendArrayToTextFile(User* usersArray, unsigned arrayLength)
     {
         ofstream writer;
-        writer.open("wealthiestUsers.txt", ios::app);
+        char filename[256]{'\0'};
+        long long timeNow = time(nullptr);
+        char timeToChar[128] = {'\0'};
+        sprintf(timeToChar, "%d", timeNow);
+        strcpy(filename,"wealthiest-users_" ) ;
+        strcat(filename, timeToChar);
+        strcat(filename, ".txt");
+        writer.open(filename, ios::app);
 
         if (!writer.is_open())
         {
@@ -365,7 +376,7 @@ public:
          
         for (size_t i = 0; i <= arrayLength; i++)
         {
-            writer << usersArray[i].name << ' ' << userCoins[usersArray[i].id] << endl;
+            writer << "username: " << usersArray[i].name << " ," << "amount of coins: " << userCoins[usersArray[i].id] << endl;
         }
        
     }
@@ -388,7 +399,7 @@ public:
 
                 if (userCoins[users[i].id] >= userCoins[wealthiestUsers[j].id])
                 {
-                    unsigned startIndex = index==n ? index-1 : index;
+                    unsigned startIndex = index == n ? index-1 : index;
                     shiftRight(wealthiestUsers, startIndex, j);
                     index = index < n ? index + 1 : index;
                     wealthiestUsers[j] = users[i]; 
@@ -404,6 +415,78 @@ public:
 
         delete[] wealthiestUsers;
     }
+    
+    void insertBlockID(unsigned* biggestBlockIDs, unsigned size, double coins, unsigned &numberOfIDs, double* sumsOfBlocks, unsigned currentID)
+    {
+        for (size_t i = 0; i < size; i++)
+        {
+            if (coins > sumsOfBlocks[i])
+            {
+                unsigned startIndex = numberOfIDs == size ? numberOfIDs - 1 : numberOfIDs;
+                shiftRight(sumsOfBlocks, startIndex, i);
+                sumsOfBlocks[i] = coins;
+                biggestBlockIDs[i] = currentID;
+                numberOfIDs = numberOfIDs < size ? numberOfIDs + 1 : numberOfIDs;
+                break;
+            }
+        }
+    }
+
+    void getBiggestBlocks(unsigned size)
+    {
+        unsigned* biggestBlocksIDs = new unsigned[size];
+        double* sumsOfBlocks = new double[size] {0};
+
+        unsigned numberOfIDs = 0;
+
+        double sumOfCoinsFromTransactions = 0;
+
+        for (int i = 0; i < blocksCount; i++)
+        {
+            for (int j = 0; j < blocks[i].validTransactions; j++) 
+            {
+                sumOfCoinsFromTransactions += blocks[i].transactions[j].coins;
+            }
+
+            insertBlockID(biggestBlocksIDs, size, sumOfCoinsFromTransactions, numberOfIDs, sumsOfBlocks, i+1);
+           
+            sumOfCoinsFromTransactions = 0;
+        }
+
+        printArray(sumsOfBlocks, biggestBlocksIDs, numberOfIDs);
+        sendArraysToTextFile(biggestBlocksIDs, sumsOfBlocks, numberOfIDs);
+    }
+
+    void sendArraysToTextFile(unsigned* biggestBlocksIDs, double* sumsOfBlocks, unsigned arrayLength)
+    {
+        ofstream writer;
+        char filename[256]{ '\0' };
+        long long timeNow = time(nullptr);
+        char timeToChar[128] = { '\0' };
+        sprintf(timeToChar, "%d", timeNow);
+        strcpy(filename, "biggest-blocks_");
+        strcat(filename, timeToChar);
+        strcat(filename, ".txt");
+        writer.open(filename, ios::app);
+
+        if (!writer.is_open())
+        {
+            return;
+        }
+
+        for (size_t i = 0; i < arrayLength; i++)
+        {
+            writer << "Sum of block with ID " << biggestBlocksIDs[i] << " is " << sumsOfBlocks[i] << " coins." << endl;
+        }
+    }
+
+    void shiftRight(double* sumsOfBlocks, unsigned startIndex, unsigned endIndex)
+    {
+        for (size_t i = startIndex; i > endIndex; i--)
+        {
+            sumsOfBlocks[i] = sumsOfBlocks[i - 1];
+        }
+    }
 
     void shiftRight(User* users, unsigned startIndex, unsigned endIndex)
     {
@@ -413,13 +496,25 @@ public:
         }
     }
 
-    void printArray(User* users, unsigned size)
+    //to be deleted:
+
+    void printArray(User* users, unsigned size) // have to ask
     {
         for (size_t i = 0; i < size; i++)
         {
             cout << users[i].name << ' ' << userCoins[users[i].id] << endl;
         }
-    }
+    }  // to be deleted
+
+    void printArray(double* sumsOfBlocks, unsigned* biggestBlocksIDs, unsigned size) // have to ask
+    {
+        for (size_t i = 0; i < size; i++)
+        {
+            cout << "Sum of block with ID " << biggestBlocksIDs[i] << " is " << sumsOfBlocks[i] << endl;
+        }
+    } // ? // to be deleted
+
+    // end
 
     bool isTransactionValid(unsigned senderID, unsigned receiverID, double amountOfCoins)
     {
@@ -465,15 +560,11 @@ public:
 
     void createTransaction(unsigned senderID, unsigned receiverID, unsigned amountOfCoins)
     {
-       
-
-
         Transaction transaction;
         transaction.sender = senderID;
         transaction.receiver = receiverID;
         transaction.coins = amountOfCoins;
-
-
+        transaction.time = time(nullptr);
 
         addTransactionToBlock(transaction);
     }
@@ -493,10 +584,10 @@ public:
 int main()
 {
     blockChain bc;
-
-    
-    bc.getWealthiestUsers(4);
-
+   
+    bc.getWealthiestUsers(5);
+    bc.getBiggestBlocks(3);
 
    
+
 }

@@ -74,19 +74,44 @@ private:
         char name[128];
         cout << "Enter the name of the user you wish to remove: ";
         cin.getline(name, 128);
+        if (cin.fail())
+        {
+            cleanInputBuffer();
+        }
 
         for (size_t i = 0; i < usersCount; i++)
         {
             if (strcmp(name, users[i].name) == 0)
             {
                 createTransaction(users[i].id, 0, userCoins[users[i].id]);
-                removeUserByIndex(i);
+                
                 cout << "Successfuly removed!";
-                usersCount--;
+                
                 userCoins[users[i].id] = -1;
+                removeUserByIndex(i);
+                usersCount--;
                 break;
             }
         }
+    }
+
+    bool userExists(const char* name)
+    {
+        for (size_t i = 0; i < usersCount; i++)
+        {
+            if (strcmp(name, users[i].name) == 0)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    void cleanInputBuffer()
+    {
+        cin.clear();
+        cin.ignore(numeric_limits<streamsize>::max(), '\n');
     }
 
     void createUser()
@@ -94,6 +119,21 @@ private:
         User user;
         cout << "Enter name: ";
         cin.getline(user.name, 128);
+        if (cin.fail()) 
+        {
+            cleanInputBuffer();
+        }
+
+        while (userExists(user.name))
+        {
+            cout << "User with the same username already exists! Try another name: " << endl;
+            cin.getline(user.name, 128);
+            if (cin.fail())
+            {
+                cleanInputBuffer();
+            }
+        }
+
         user.id = currentId++;
 
         double cash;
@@ -204,7 +244,7 @@ private:
 
     bool userIsValid(unsigned userID) const
     {
-        return userCoins[userID] != -1 || userID == 0 || userID>currentId;
+        return userID != 0 && userID <= currentId && userCoins[userID] != -1;
     }
 
     unsigned getCurrentId() const {
@@ -224,11 +264,15 @@ private:
 
     bool isTransactionValid(unsigned senderID, unsigned receiverID, double amountOfCoins)
     {
+        if (senderID == receiverID)
+        {
+            return 0;
+        } 
         if (!(userIsValid(senderID) && userIsValid(receiverID)))
         {
             return 0;
         }
-        if ((amountOfCoins > userCoins[senderID] || amountOfCoins <= 0) && senderID != 0)
+        if (amountOfCoins > userCoins[senderID] || amountOfCoins <= 0) 
         {
             return 0;
         }
@@ -248,19 +292,23 @@ private:
 
         cout << "Tell me how many coins are we transfering: ";
         cin >> amountOfCoins;
-
-        cin.ignore();
+        if (cin.fail())
+        {
+            cleanInputBuffer();
+        }
+        else { cin.ignore(); }
 
         if (!(isTransactionValid(senderID, receiverID, amountOfCoins)))
         {
 
-            cout << "Transaction failed! Cause may be that an ID was incorrect or the sender doesn't have enough coins.";
+            cout << "Transaction failed! Cause may be that an ID was incorrect or the sender doesn't have enough coins." << endl;
             return;
         }
 
         createTransaction(senderID, receiverID, amountOfCoins);
         userCoins[senderID] -= amountOfCoins;
         userCoins[receiverID] += amountOfCoins;
+        cout << "Successfuly sent coins!" << endl;
 
     }
 
@@ -290,6 +338,19 @@ private:
 
     }
 
+    bool checkTransactionsToBePositive()
+    {
+        for (size_t i = 0; i < blocksCount; i++)
+        {
+            if (blocks[i].validTransactions <= 0)
+            {
+                cout << "You can't have a block with 0 or less transactions! I noticed that block number " << i << " has 0 or less transactions. Please fix the file!" << endl;
+                return 0;
+            }
+        }
+        return 1;
+    }
+
     void readBlocks()
     {
         ifstream reader;
@@ -306,7 +367,6 @@ private:
         reader.read((char*)blocks, sizeof(TransactionBlock) * blocksSize);
 
         blocksCount = blocksSize;
-
         reader.close();
     }
      
@@ -424,7 +484,7 @@ private:
             return;
         }
 
-        for (size_t i = 0; i <= arrayLength; i++)
+        for (size_t i = 0; i < arrayLength; i++)
         {
             writer << "username: " << usersArray[i].name << ", " << "amount of coins: " << userCoins[usersArray[i].id] << endl;
         }
@@ -597,6 +657,11 @@ public:
 
     void interface()
     {
+        if (!checkTransactionsToBePositive())
+        {
+            return;
+        }
+
         cout << "Hello and welcome to OOPCoin. Valid commands are: create-user, remove-user, send-coins,\nwealthiest-users, biggest-blocks, verify-transactions and exit." << endl;
         
         
@@ -609,7 +674,7 @@ public:
             {
                 cin.clear();
                 cin.ignore(numeric_limits<streamsize>::max(), '\n');
-                cout << "Not a valid command! Should be less than 20 characters." << endl;
+                cout << "Invalid command! Valid commands are: create-user, remove-user, send-coins, wealthiest-users, biggest-blocks, verify-transactions and exit" << endl;
                 continue;
             }
 
